@@ -1,0 +1,13 @@
+{
+  "signal_service": "http://localhost:8080",
+  "phone_number": "+12344567890",
+  "schedule": {
+    "hour": 13,
+    "minute": 0
+  },
+  "recipient": {
+    "type": "group",
+    "value": "group.id_of_sign_chat"
+  },
+  "message": "Message reminder you want to send to group"
+}
