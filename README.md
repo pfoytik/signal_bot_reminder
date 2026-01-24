@@ -5,6 +5,7 @@ A script to send scheduled messages via Signal using signal-cli REST API.
 ## Prerequisites
 
 - signal-cli REST API running (in json-rpc mode for bot operations)
+ - https://github.com/bbernhard/signal-cli-rest-api
 - A linked Signal account
 - Python 3
 
