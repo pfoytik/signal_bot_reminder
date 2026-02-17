@@ -9,6 +9,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "reminder_config.json")
 
 MEMPOOL_API = "https://mempool.757btc.org/api"
+POSTER_DATA_URL = "https://raw.githubusercontent.com/757btc/757btc.github.io/main/assets/data/poster-data.json"
 
 def load_config():
     with open(CONFIG_FILE) as f:
@@ -40,6 +41,48 @@ def fetch_bitcoin_data():
 
     return data
 
+def fetch_meetup_data():
+    """Fetch meetup and link data from poster-data.json."""
+    try:
+        with urllib.request.urlopen(POSTER_DATA_URL) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        print(f"Failed to fetch poster data: {e}")
+        return None
+
+def format_meetup_message(poster_data):
+    """Format meetup data into message text."""
+    lines = []
+
+    meetups = poster_data.get("meetups", {})
+    if meetups.get("list"):
+        title = meetups.get("title", "Meetups")
+        lines.append(title)
+        for m in meetups["list"]:
+            parts = []
+            if m.get("frequency"):
+                parts.append(m["frequency"])
+            if m.get("schedule"):
+                parts.append(m["schedule"])
+            if m.get("location"):
+                parts.append(f"at {m['location']}")
+            if m.get("time"):
+                parts.append(m["time"])
+            lines.append(f"- {' '.join(parts)}")
+
+    links = poster_data.get("links", [])
+    if links:
+        lines.append("")
+        for link in links:
+            text = link.get("text", link.get("label", ""))
+            url = link.get("url", "")
+            if text and url:
+                lines.append(f"{text} {url}")
+            elif url:
+                lines.append(url)
+
+    return "\n".join(lines)
+
 def format_bitcoin_header():
     """Format Bitcoin data as message header."""
     data = fetch_bitcoin_data()
@@ -65,9 +108,17 @@ def send_message():
     recipient_value = recipient.get("value")
 
     # Build message with Bitcoin data header
-    message_header = "<><><><>-- DailyDrop757 --<><><><>"
+    message_header = "<><><>- DailyDrop757 -<><><>"
     bitcoin_header = format_bitcoin_header()
-    full_message = f"{message_header}\n\n{bitcoin_header}\n\n{config['message']}"
+
+    # Fetch meetup data dynamically, fall back to static config message
+    poster_data = fetch_meetup_data()
+    if poster_data:
+        meetup_message = format_meetup_message(poster_data)
+    else:
+        meetup_message = config.get('message', '')
+
+    full_message = f"{message_header}\n\n{bitcoin_header}\n\n{meetup_message}"
 
     url = f"{config['signal_service']}/v2/send"
 
