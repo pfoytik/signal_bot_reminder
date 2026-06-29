@@ -19,23 +19,30 @@ def fetch_bitcoin_data():
     """Fetch block height, price, and fees from mempool API."""
     data = {}
 
+    #curl -sSL "https://mempool.757btc.org/api/blocks/tip/height"
     try:
-        with urllib.request.urlopen(f"{MEMPOOL_API}/blocks/tip/height") as resp:
-            data["block_height"] = resp.read().decode().strip()
+        url = f"{MEMPOOL_API}/blocks/tip/height"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        resp = urllib.request.urlopen(req)
+        data["block_height"] = resp.read().decode()
     except Exception:
         data["block_height"] = "N/A"
 
     try:
-        with urllib.request.urlopen(f"{MEMPOOL_API}/v1/prices") as resp:
-            prices = json.loads(resp.read().decode())
-            data["price_usd"] = prices.get("USD", "N/A")
+        url = f"{MEMPOOL_API}/v1/prices"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        resp = urllib.request.urlopen(req)
+        prices = json.loads(resp.read().decode())
+        data["price_usd"] = prices.get("USD", "N/A")
     except Exception:
         data["price_usd"] = "N/A"
 
     try:
-        with urllib.request.urlopen(f"{MEMPOOL_API}/v1/fees/recommended") as resp:
-            fees = json.loads(resp.read().decode())
-            data["fees"] = fees
+        url = f"{MEMPOOL_API}/v1/fees/recommended"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"})
+        resp = urllib.request.urlopen(req)
+        fees = json.loads(resp.read().decode())
+        data["fees"] = fees
     except Exception:
         data["fees"] = None
 
@@ -101,6 +108,19 @@ def format_bitcoin_header():
 
     return "\n".join(lines)
 
+def trust_identity(config, number):
+    import re
+    url = f"{config['signal_service']}/v1/identities/{config['phone_number']}/trust/{number}"
+    data = json.dumps({"trust_all_known_keys": True}).encode('utf-8')
+    req = urllib.request.Request(url, data=data, method='PUT', headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req) as response:
+            print(f"Trusted new identity for {number}")
+            return True
+    except urllib.error.HTTPError as e:
+        print(f"Failed to trust identity for {number}: {e.read().decode()}")
+        return False
+
 def send_message():
     config = load_config()
     recipient = config.get("recipient", {"type": "self"})
@@ -150,7 +170,23 @@ def send_message():
         with urllib.request.urlopen(req) as response:
             print("Message sent successfully")
     except urllib.error.HTTPError as e:
-        print(f"Failed to send: {e.read().decode()}")
+        error_body = e.read().decode()
+        if "Untrusted Identity" in error_body:
+            import re
+            numbers = re.findall(r'(\+\d+): Untrusted Identity', error_body)
+            if numbers:
+                print(f"Untrusted identities detected: {numbers}")
+                for number in numbers:
+                    trust_identity(config, number)
+                # Retry send
+                req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+                try:
+                    with urllib.request.urlopen(req) as response:
+                        print("Message sent successfully after trusting new identities")
+                except urllib.error.HTTPError as e2:
+                    print(f"Failed to send after trusting identities: {e2.read().decode()}")
+        else:
+            print(f"Failed to send: {error_body}")
 
 def list_groups():
     config = load_config()
